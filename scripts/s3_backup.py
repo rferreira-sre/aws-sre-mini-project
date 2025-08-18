@@ -1,1 +1,1 @@
-scripts/s3_backup.py
+# s3 backup script placeholder
