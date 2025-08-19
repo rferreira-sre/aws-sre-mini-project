@@ -181,5 +181,5 @@ Observability: “Viewed EC2 metrics; added alarm → SNS email for fast detecti
 Next: “Pipeline will validate/plan/apply; scripts will monitor HTTP + back up to S3.”
 
 
-If you want, I can also generate the **Terraform (AL2023-compatible) files** next so your pipeline can deploy the same stack automatically.
+
 
