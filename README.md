@@ -1,185 +1,171 @@
-# AWS SRE Mini Project
+# 🚀 SRE/DevOps Project – AWS, Terraform, Monitoring & Incident Drill
 
-A small, production-style demo to showcase SRE fundamentals on AWS Free Tier:
-- **Compute:** EC2 (Amazon Linux 2023)
-- **Networking:** Security Groups
-- **Web:** Nginx with a custom landing page
-- **Monitoring:** CloudWatch metrics + (optional) alarms via SNS
-- **Storage:** S3 (manual bucket for Day 1–3)
-- **Repo:** GitHub (CI/CD coming next in Days 4–6)
+A small, production-style demo to showcase SRE fundamentals on AWS Free Tier.
+The project intentionally starts with manual setup and then evolves into Infrastructure as Code (Terraform + Azure DevOps/GitHub CI/CD), simulating how real teams migrate from manual ops → automation.
 
-> Region: **us-east-1 (N. Virginia)**
+
+# 🎯 Overall Goal
+
+- Demonstrate Site Reliability Engineering practices end-to-end on AWS.
+
+- Cover infra setup, monitoring, automation, CI/CD, incident response, and postmortems.
+
+- Simulate real-world workflows with Jira (Epics, Tasks, Sprints), GitHub (branches, PRs), and AWS tooling.
+
+# **📌 Roadmap / Steps**
+
+
+**Manual Phase (completed)**
+
+- Launch EC2 instance (Amazon Linux 2023, Free Tier).
+
+- Configure Security Groups (least privilege).
+
+- Install & serve a custom Nginx landing page.
+
+- Enable CloudWatch metrics (CPU, Status Checks).
+
+- Add alarms via SNS for notifications.
+
+- Perform a manual incident drill: stop Nginx, trigger Route 53 health check → CloudWatch alarm → SNS email.
+
+- Document incident + postmortem in repo and Jira.
+ 
+# **🔜 Next Phases (in progress / planned)**
+
+- Terraform (IaC): codify EC2, SG, S3, CloudWatch alarms, SNS topics.
+
+- CI/CD (Azure Pipelines & GitHub Actions): plan/apply/destroy Terraform infra with gated approvals.
+
+- Scripting: health checks (health_check.sh) and automated S3 backups (s3_backup.py).
+
+- Advanced SRE: SLI/SLOs, error budgets, lessons learned.
+
+- Final polish: Jira traceability + interview-ready documentation.
+
+
 
 ---
 
-## Repo Structure (current)
-aws-sre-mini-project/
-├─ terraform/ # (Days 4–6: will codify here)
-├─ scripts/ # (Days 7–9: health check & backups)
-├─ .github/workflows/ # (CI/CD: GitHub Actions)
-├─ docs/screenshots/ # <-- put screenshots here
-├─ README.md
-└─ postmortem.md
+## 📂 Repo Structure
+
+<img width="618" height="394" alt="image" src="https://github.com/user-attachments/assets/e631003f-2709-4b51-bc3e-d2561821f549" />
 
 
 ---
 
-## ✅ Days 1–3: What I Built
+## 🌐 Cloud Setup (Epic E1)
 
-- Launched **EC2 t2.micro/t3.micro** (Amazon Linux **2023**, Free Tier).
-- Created **Security Group**:
-  - **HTTP (80)** → `0.0.0.0/0` (public web)
-  - **SSH (22)** → **My IP** (or EC2 Instance Connect prefix list)
-- Installed **Nginx** and published a UTF-8 landing page.
-- Viewed instance metrics in **CloudWatch**.
-- (Optional) Created a private **S3** bucket for “Day 1–3 storage.”
+AWS resources created manually first:
+- EC2 (Nginx web server)
+- Route 53 health checks
+- CloudWatch alarms
+- SNS notifications
 
-### Instance details (example)
-- Name: `sre-day1-demo`
-- AMI: Amazon Linux 2023 (x86_64, kernel 6.1)
-- Type: `t2.micro` (or `t3.micro`)
-- Public: `http://<PUBLIC_DNS_OR_IP>/`
+📸 Screenshots:  
+<img width="585" height="324" alt="image" src="https://github.com/user-attachments/assets/ddb90144-2518-46f6-99d1-c5713c73e3fa" />
+
+<img width="926" height="113" alt="image" src="https://github.com/user-attachments/assets/f83b5460-e4d9-495d-b6f1-808233790751" />
+
+![Route53 HealthCheck](docs/manual/route53-health.png)  
+
+<img width="886" height="230" alt="image" src="https://github.com/user-attachments/assets/3580d62b-2f49-40a1-83bb-7f5b03e3962f" />
+
 
 ---
 
-## How to Reproduce (console only)
+## 🛠️ Terraform IaC (Epic E2)
 
-### 1) Launch EC2
-- EC2 → **Launch instances**
-- AMI: **Amazon Linux 2023 (x86_64)**
-- Type: **t2.micro** (Free Tier)
-- Key pair: **Proceed without key pair** (use **EC2 Instance Connect**)
-- Networking:
-  - New Security Group:
-    - **HTTP** 80 → `0.0.0.0/0`
-    - **SSH** 22 → **My IP**
-  - Auto-assign public IP: **Enable**
+All manual AWS resources migrated to Terraform for repeatability.  
+Key modules: `ec2`, `route53`, `cloudwatch`, `sns`.
 
-### 2) Connect (browser SSH)
-EC2 → select instance → **Connect** → **EC2 Instance Connect** → user `ec2-user`.
+📸 Screenshots:  
+![Terraform Plan](docs/manual/terraform-plan.png)  
+![Terraform Apply](docs/manual/terraform-apply.png)  
 
-### 3) Install Nginx (Amazon Linux 2023)
-```bash
-sudo dnf update -y
-sudo dnf install -y nginx
-sudo systemctl enable nginx
-sudo systemctl start nginx
+---
 
-4) Custom landing page (with instance metadata)
+## ⚡ CI/CD Pipeline (Epic E3)
 
-TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
-  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
-PUBIP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
-AZ=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone)
-REGION=${AZ::-1}
+Azure DevOps pipeline builds & deploys Terraform automatically.
 
-cat <<EOF | sudo tee /usr/share/nginx/html/index.html > /dev/null
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Rafael’s SRE Demo on AWS</title>
-  <style>
-    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; }
-    *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;background:linear-gradient(135deg,#0f172a,#1f2937)}
-    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-    .card{width:100%;max-width:760px;background:rgba(17,24,39,.85);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:28px;backdrop-filter:blur(6px);box-shadow:0 10px 30px rgba(0,0,0,.35)}
-    h1{color:#fff;margin:0 0 8px;font-size:28px} p{color:var(--muted);margin:0 0 16px}
-    .badge{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(34,197,94,.12);color:#86efac;font-weight:600;font-size:12px;margin:4px 0 16px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
-    .tile{background:#0b1220;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px}
-    .label{color:#9ca3af;font-size:12px;margin-bottom:6px}.value{color:#e5e7eb;font-weight:600;word-break:break-all}
-    .footer{margin-top:18px;color:#9ca3af;font-size:12px}
-  </style>
-</head>
-<body>
-  <div class="wrap"><div class="card">
-    <div class="badge">HTTP 200 • Nginx is running</div>
-    <h1>Rafael’s SRE Demo on AWS 🚀</h1>
-    <p>Mini environment for IaC, CI/CD, monitoring, and incident drills.</p>
+📸 Screenshots:  
+![Azure Pipeline](docs/manual/azure-pipeline.png)  
 
-    <div class="grid">
-      <div class="tile"><div class="label">Instance ID</div><div class="value">${IID}</div></div>
-      <div class="tile"><div class="label">Public IPv4</div><div class="value">${PUBIP}</div></div>
-      <div class="tile"><div class="label">Region / AZ</div><div class="value">${REGION} / ${AZ}</div></div>
-      <div class="tile"><div class="label">Server</div><div class="value">Amazon Linux 2023 • Nginx</div></div>
-    </div>
+---
 
-    <div class="footer">Project: AWS SRE Demo • Built by Rafael Ferreira</div>
-  </div></div>
-</body>
-</html>
-EOF
+## 🔔 Monitoring & Incident Drill (Epic E4)
 
-sudo nginx -t && sudo systemctl reload nginx
+### Incident Drill – Nginx Outage (2025-08-20)
 
-Open in your browser: http://52.90.228.79/
+**Jira:** SRE-8  
+**Service:** EC2 (Nginx)  
+**Detection:** Route 53 HTTP health check → CloudWatch Alarm → SNS email  
+**Impact:** Landing page unavailable from the internet  
 
-5) CloudWatch (metrics + optional alarm)
+### Timeline (UTC)
+- 02:37 – Stopped nginx (`systemctl stop nginx`)  
+- 02:40 – CloudWatch alarm entered **ALARM** (SNS email received)  
+- 02:45 – Started nginx (`systemctl start nginx`)  
+- 02:47 – Alarm returned to **OK** (recovery email)  
 
-Metrics: EC2 → select instance → Monitoring tab (CPU, Status checks, Network).
+### Root Cause
+This was a **manual drill**, not a real outage. We intentionally stopped nginx to validate monitoring & alerting.  
 
-Optional alarm: CPUUtilization > 70 (1 datapoint) or StatusCheckFailed ≥ 1, action → SNS topic with email subscription.
+### Recovery
+Restarted nginx. Verified Route 53 health check healthy and CloudWatch alarm back to **OK**.  
 
-6) S3 bucket (optional)
+### Evidence
+<img width="675" height="419" alt="image" src="https://github.com/user-attachments/assets/0b63bf66-ce69-4270-8d28-a80f03772c42" />
 
-S3 → Create bucket → name like rafael-sre-manual-<random> (private, SSE-S3).
+<img width="1418" height="230" alt="image" src="https://github.com/user-attachments/assets/8a7bcae4-51fc-4674-9e5c-21a32969080a" />
 
-Upload a small test file (e.g., hello.txt) or create a backups/ prefix.
+<img width="1404" height="589" alt="image" src="https://github.com/user-attachments/assets/35f0b237-af1b-400f-a1f6-965155ee2b27" />
 
-Screenshots (placeholders)
+<img width="1387" height="534" alt="image" src="https://github.com/user-attachments/assets/223db00c-aac4-4963-86c6-92d53ef5bf0d" />
+ 
 
-Put images in docs/screenshots/ and keep these filenames so the links render.
+📄 Full report: [docs/incidents/2025-08-20-nginx-drill.md](docs/incidents/2025-08-20-nginx-drill.md)  
 
-Instances list (running, checks passed)
+---
+
+## 📊 Jira Documentation (Epic E5)
+
+Project fully tracked in **Jira** with Epics → Tasks → Sprints.
+
+- **Epic E1:** Cloud Setup  
+- **Epic E2:** Terraform  
+- **Epic E3:** CI/CD  
+- **Epic E4:** Monitoring & Incidents  
+- **Epic E5:** Docs & Interview Prep  
+
+Example:  
+- **Task SRE-8:** Manual Incident Drill – Stop Nginx & Validate Alarm  
+  - Subtasks: stop service, verify alert, recover service, document incident  
+  - Linked PR: `feature/SRE-8-incident-drill`  
+  - Evidence: screenshots + SNS emails  
+
+📸 Jira Screenshots:  
+<img width="1725" height="716" alt="image" src="https://github.com/user-attachments/assets/d532397c-7150-4488-aecb-6e81a1a9d763" />
 
 
-Security Group inbound rules (HTTP 80 open to internet; SSH 22 restricted)
+<img width="1641" height="833" alt="image" src="https://github.com/user-attachments/assets/c60ad5ca-c537-43fc-8897-b5205bf385f6" />
 
 
-Public landing page (custom Nginx page)
+---
 
+## ✅ Lessons Learned
+- App-level monitoring is required; EC2 host metrics alone won’t catch app failures.  
+- Route 53 + CloudWatch + SNS = simple but effective lightweight monitoring.  
+- Terraform migration ensures infra is reproducible.  
+- Jira provides full visibility into tasks, drills, and outcomes.  
 
-Monitoring chart (CPU or Status checks)
+---
 
+## 🏁 Next Steps
+- Convert Route 53 + CloudWatch alarms into Terraform (SRE-6).  
+- Integrate alarm notifications with Slack or MS Teams.  
+- Expand CI/CD pipelines with automated test stages.  
 
-(Optional) S3 bucket overview
-
-
-Ops Notes / Hardening
-
-Keep SSH (22) restricted to My IP or the EC2 Instance Connect prefix list:
-com.amazonaws.us-east-1.ec2-instance-connect
-
-Nginx is enabled to start on boot (systemctl enable nginx).
-
-Costs: stays in Free Tier with t2.micro/t3.micro + basic CloudWatch.
-
-Next Steps
-
-Days 4–6 (Terraform): codify EC2 + SG + S3 + CloudWatch + SNS.
-
-Days 7–9 (Scripting): health_check.sh + s3_backup.py.
-
-Days 10–11 (CI/CD): GitHub Actions to plan/apply/destroy Terraform.
-
-Days 12–13 (SRE): SLI/SLO, error budgets, incident mgmt basics.
-
-Day 14: Simulate incident, capture alert, write postmortem.
-
-Day 15: Jira + Scrum/Kanban + final polish/demo.
-
-Demo Talking Points
-
-IaC mindset: “I started manual, then codified infra via Terraform.”
-
-Ops hygiene: “Least-privilege SG, browser SSH via EC2 Instance Connect, UTF-8 page.”
-
-Observability: “Viewed EC2 metrics; added alarm → SNS email for fast detection.”
-
-Next: “Pipeline will validate/plan/apply; scripts will monitor HTTP + back up to S3.”
-
-
-
+---
 
