@@ -1,0 +1,123 @@
+# Azure Pipelines for GitHub repo (Terraform on AWS)
+# - Plan on PRs/branches
+# - Plan+Apply on main (Apply can be approval-gated via Environment)
+
+trigger:
+  branches:
+    include:
+      - main
+      - feature/*
+
+pr:
+  branches:
+    include:
+      - "*"
+
+# Pull secure values from Library → Variable Groups (see steps below)
+variables:
+- group: aws-prod-vars
+
+# Defaults (can be overridden in the variable group if you prefer)
+variables:
+  TF_VERSION: '1.6.6'
+  TF_WORKDIR: 'terraform'
+  # Expect these to come from the variable group:
+  # AWS_ACCESS_KEY_ID (secret)
+  # AWS_SECRET_ACCESS_KEY (secret)
+  # AWS_REGION = us-east-1
+  # SNS_EMAIL = you@example.com
+  # (optional) ALLOW_SSH = false
+  # (optional) MY_IP_CIDR = 1.2.3.4/32
+
+stages:
+# -------------------- PLAN --------------------
+- stage: Plan
+  displayName: Terraform Plan
+  jobs:
+  - job: plan
+    displayName: Plan
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+      persistCredentials: true  # so PR validation works
+
+    - task: Bash@3
+      displayName: Install Terraform $(TF_VERSION)
+      inputs:
+        targetType: inline
+        script: |
+          set -e
+          curl -fsSL "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -o tf.zip
+          sudo unzip -o tf.zip -d /usr/local/bin
+          terraform -version
+
+    - task: Bash@3
+      displayName: Terraform init/validate/plan
+      env:
+        AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+        AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+        AWS_DEFAULT_REGION: $(AWS_REGION)
+      inputs:
+        targetType: inline
+        script: |
+          set -e
+          cd "$(TF_WORKDIR)"
+          terraform init -input=false
+          terraform fmt -check
+          terraform validate
+          terraform plan -input=false -out=tfplan \
+            -var="region=$(AWS_REGION)" \
+            -var="sns_email=$(SNS_EMAIL)" \
+            -var="allow_ssh=${ALLOW_SSH:-false}" \
+            -var="my_ip_cidr=${MY_IP_CIDR:-0.0.0.0/32}"
+
+    - publish: $(TF_WORKDIR)/tfplan
+      artifact: tfplan
+      displayName: Publish plan artifact
+
+# -------------------- APPLY (main only) --------------------
+- stage: Apply
+  displayName: Terraform Apply (main)
+  dependsOn: Plan
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+  - deployment: apply
+    displayName: Apply
+    # Create this Environment in DevOps and add an Approval to require a manual gate
+    environment: aws-prod
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          - download: current
+            artifact: tfplan
+            displayName: Download plan artifact
+
+          - task: Bash@3
+            displayName: Install Terraform $(TF_VERSION)
+            inputs:
+              targetType: inline
+              script: |
+                set -e
+                curl -fsSL "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -o tf.zip
+                sudo unzip -o tf.zip -d /usr/local/bin
+                terraform -version
+
+          - task: Bash@3
+            displayName: Terraform apply
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              AWS_DEFAULT_REGION: $(AWS_REGION)
+            inputs:
+              targetType: inline
+              script: |
+                set -e
+                cd "$(TF_WORKDIR)"
+                terraform init -input=false
+                terraform apply -input=false "$(Pipeline.Workspace)/tfplan/tfplan"
+
+
