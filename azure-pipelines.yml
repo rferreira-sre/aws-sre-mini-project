@@ -13,21 +13,16 @@ pr:
     include:
       - "*"
 
-# Pull secure values from Library → Variable Groups (see steps below)
+# Pull secure values from Library → Variable Groups 
 variables:
 - group: aws-prod-vars
 
-# Defaults (can be overridden in the variable group if you prefer)
-variables:
-  TF_VERSION: '1.6.6'
-  TF_WORKDIR: 'terraform'
-  # Expect these to come from the variable group:
-  # AWS_ACCESS_KEY_ID (secret)
-  # AWS_SECRET_ACCESS_KEY (secret)
-  # AWS_REGION = us-east-1
-  # SNS_EMAIL = you@example.com
-  # (optional) ALLOW_SSH = false
-  # (optional) MY_IP_CIDR = 1.2.3.4/32
+- name: TF_VERSION
+  value: '1.6.6'
+
+- name: TF_WORKDIR
+  value: 'terraform'
+
 
 stages:
 # -------------------- PLAN --------------------
